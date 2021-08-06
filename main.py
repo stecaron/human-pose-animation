@@ -1,21 +1,88 @@
 import cv2
 import mediapipe as mp
+import numpy as np
+import time
+import click
 
-mpDraw = mp.solutions.drawing_utils
-mpPose = mp.solutions.pose
-pose = mpPose.Pose()
 
-cap = cv2.VideoCapture('videos/video-1.mp4')
+class poseDetector():
 
-while True:
-    success, img = cap.read()
+    def __init__(self, mode=False, upBody=False, smooth=True, detectionCon=0.3, trackingCon=0.3):
 
-    imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    results = pose.process(imgRGB)
+        self.mode = mode
+        self.upBody = upBody
+        self.smooth = smooth
+        self.detectionCon = detectionCon
+        self.trackingCon = trackingCon
 
-    if results.pose_landmarks:
-        mpDraw.draw_landmarks(img, results.pose_landmarks, mpPose.POSE_CONNECTIONS)
+        self.mpDraw = mp.solutions.drawing_utils
+        self.mpPose = mp.solutions.pose
+        self.pose = self.mpPose.Pose(
+            self.mode, self.upBody, self.smooth, self.detectionCon, self.trackingCon)
 
-    cv2.imshow('Image', img)
+    def findPose(self, img):
 
-    cv2.waitKey(1)
+        imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        self.results = self.pose.process(imgRGB)
+
+        # Change the image to black
+        img[img > 0] = 0
+
+        if self.results.pose_landmarks:
+            self.mpDraw.draw_landmarks(img, self.results.pose_landmarks, self.mpPose.POSE_CONNECTIONS)
+
+        return img
+
+    def findPositions(self, img, draw=True):
+        lmList = []
+        if self.results.pose_landmarks:
+            for id, lm in enumerate(self.results.pose_landmarks.landmark):
+                h, w, c = img.shape
+                cx, cy = int(lm.x * w), int(lm.y * h)
+                lmList.append([id, cx, cy])
+                if draw:
+                    if id > 10:
+                        cv2.circle(img, (cx, cy), 8, (255, 0, 0), cv2.FILLED)
+                    if id == 0:
+                        cv2.circle(img, (cx, cy), 50, (0, 0, 0), cv2.FILLED)
+                        cv2.circle(img, (cx, cy), 50, (0, 255, 0), 2)
+                    
+
+        return lmList
+
+@click.command()
+@click.argument('video_path')
+def main(video_path, perc_resize=0.4):
+
+    cap = cv2.VideoCapture(video_path)
+    pTime = 0
+    detector = poseDetector()
+
+    while True:
+        success, img = cap.read()
+
+        # exit loop if there was problem to get frame to display
+        if not success:
+            break
+
+        img = cv2.resize(img, (int(img.shape[1] * perc_resize), int(img.shape[0] * perc_resize)))
+        original_image = np.copy(img)
+        img = detector.findPose(img)
+        lmList = detector.findPositions(img, draw=True)
+
+        # Concatenate the 2 videos
+        concatenate_img = np.hstack((original_image, img))
+
+        cTime = time.time()
+        fps = 1 / (cTime - pTime)
+        pTime = cTime
+
+        cv2.putText(concatenate_img, str(int(fps)), (70, 50),
+                    cv2.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 3)
+        cv2.imshow('Image', concatenate_img)
+
+        cv2.waitKey(1)
+
+
+if __name__ == "__main__":
+    main()
