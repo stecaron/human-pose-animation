@@ -46,8 +46,6 @@ class poseDetector():
                     if id == 0:
                         cv2.circle(img, (cx, cy), 50, (0, 0, 0), cv2.FILLED)
                         cv2.circle(img, (cx, cy), 50, (0, 255, 0), 2)
-                    if id == 15:
-                        cv2.circle(img, (cx, cy), 20, (0, 255, 0), 2)
                     
 
         return lmList
